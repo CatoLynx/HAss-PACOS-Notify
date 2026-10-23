@@ -39,7 +39,8 @@ class NotificationDisplay:
     def __init__(self, host, port, address, home_assistant):
         self.host = host
         self.port = port
-        self.display = IBISMaster(TcpSerialPort(self.host, self.port))
+        self.display = None
+        self.reconnect()
         self.address = address
         self.hass = home_assistant
         self.running = True
@@ -49,7 +50,11 @@ class NotificationDisplay:
         self.notifications = []
 
     def reconnect(self):
-        self.display = IBISMaster(TcpSerialPort(self.host, self.port))
+        try:
+            self.display = IBISMaster(TcpSerialPort(self.host, self.port))
+        except:
+            print("Failed to reconnect")
+            #traceback.print_exc()
 
     def notify(self, text):
         self.notifications.append((time.time(), text))
@@ -64,8 +69,20 @@ class NotificationDisplay:
         self.update_display()
 
     def clear_display(self):
-        self.display.DS021_PACOS(self.address, "%32")
-        time.sleep(0.5)
+        attempt = 1
+        while True:
+            try:
+                self.display.DS021_PACOS(self.address, "%32")
+                time.sleep(0.5)
+                break
+            except:
+                if attempt > 3:
+                    print("Giving up")
+                    break
+                print(f"Error, reconnecting (attempt {attempt})")
+                self.reconnect()
+                attempt += 1
+                time.sleep(5)
 
     def update_display(self):
         attempt = 1
@@ -276,6 +293,7 @@ class NotificationDisplay:
         now_str = time.strftime("%a %d.%m.%Y %H:%M")
         now_str_short = time.strftime("%H:%M")
 
+        sensor_texts = []
         try:
             sensor_texts = self.get_sensor_texts()
         except:
